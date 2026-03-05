@@ -1,0 +1,29 @@
+# Only ship source code and Go module files — nothing else
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+bin/
+
+# Test files
+*_test.go
+coverage/
+*.out
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*~
+
+# Docs
+*.md
+
+# Git
+.git/
+.gitignore

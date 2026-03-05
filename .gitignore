@@ -1,15 +1,146 @@
+# ============================================================
+# SECRETS & ENVIRONMENT VARIABLES
+# ============================================================
+.env
+.env.local
+.env.*.local
+# Allow .env.example to be committed
+!.env.example
+
+# ============================================================
+# NODE / JS / TS
+# ============================================================
 node_modules/
 dist/
 build/
+.cache/
+*.tsbuildinfo
+.turbo/
+
+# Test output
 coverage/
-logs/
-*.log
-*.tmp
-*.env
+.nyc_output/
+
+# Package manager
+.pnpm-store/
+.yarn/
+
+# ============================================================
+# NX
+# ============================================================
+.nx/cache
+.nx/workspace-data
+
+# ============================================================
+# GO
+# ============================================================
+# Compiled binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary / coverage
+*.test
+*.out
+
+# Go workspace (only use if deliberately added)
+go.work.sum
+
+# Per-service build output
+services/*/dist/
+services/*/bin/
+
+# ============================================================
+# PYTHON
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.venv/
+venv/
+env/
+.Python
+*.egg-info/
+dist/
+*.egg
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+
+# ============================================================
+# JAVA / MAVEN / GRADLE
+# ============================================================
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+.gradle/
+build/
+out/
+
+# ============================================================
+# TERRAFORM
+# ============================================================
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.backup
+infrastructure/terraform/*.tfplan
+infrastructure/terraform/.terraform.lock.hcl
+*.tfvars
+!*.tfvars.example
+
+# ============================================================
+# DOCKER
+# ============================================================
+# Don't ignore Dockerfiles — they belong in git
+# Ignore runtime volumes / local overrides
+docker-compose.override.yml
+
+# ============================================================
+# OS
+# ============================================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ============================================================
+# IDE
+# ============================================================
+# Commit .vscode/settings.json (workspace settings) — do NOT ignore .vscode/
 .idea/
-.vscode/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
+*.swp
+*.swo
+*~
+
+# ============================================================
+# LOGS
+# ============================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================================================
+# MISC
+# ============================================================
+*.tmp
+*.temp
+*.bak
+*.orig

@@ -1,0 +1,22 @@
+{
+  "name": "distributed-architecture",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "scripts": {
+    "nx": "nx",
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "lint": "nx run-many -t lint",
+    "affected:build": "nx affected -t build",
+    "affected:test": "nx affected -t test",
+    "graph": "nx graph"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.29.3",
+  "devDependencies": {
+    "nx": "^22.5.4"
+  }
+}

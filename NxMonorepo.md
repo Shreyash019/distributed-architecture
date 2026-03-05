@@ -13,8 +13,8 @@
 4. [Nx Configuration — nx.json](#4-nx-configuration--nxjson)
 5. [Project Configuration — project.json](#5-project-configuration--projectjson)
 6. [Microservices Setup](#6-microservices-setup)
-   - [Node.js Service](#61-nodejs-service)
-   - [Go Service](#62-go-service)
+   - [Go Service — api-gateway](#61-go-service--api-gateway)
+   - [NestJS Service — auth](#62-nestjs-service--auth)
    - [Python Service](#63-python-service)
    - [Java (Spring Boot) Service](#64-java-spring-boot-service)
 7. [Microfrontend Setup](#7-microfrontend-setup)
@@ -71,8 +71,8 @@ monorepo/
 │   └── mobile/                    # React Native (Expo)
 │
 ├── services/                      # Microservices
-│   ├── api-gateway/               # Node.js (Fastify)
-│   ├── auth/                      # Go (Gin)
+│   ├── api-gateway/               # Go (net/http) — high-concurrency gateway
+│   ├── auth/                      # NestJS — authentication & authorization
 │   ├── notification/              # Python (FastAPI)
 │   └── payment/                   # Java (Spring Boot)
 │
@@ -301,101 +301,20 @@ Use tags for enforcing module boundaries:
 
 ## 6. Microservices Setup
 
-### 6.1 Node.js Service
+### 6.1 Go Service — api-gateway
+
+> Go is chosen for the API gateway because goroutines give you massive concurrency with low memory overhead — ideal for a gateway that proxies, rate-limits, and fans out to many downstream services simultaneously. Using the standard `net/http` package keeps the binary lean with zero external dependencies.
 
 **Structure:** `services/api-gateway/`
 
 ```
 services/api-gateway/
-├── src/
-│   ├── index.ts
-│   ├── routes/
-│   └── middleware/
-├── package.json
-├── tsconfig.json
-├── project.json
-└── Dockerfile
-```
-
-**package.json**
-```json
-{
-  "name": "@monorepo/api-gateway",
-  "version": "0.0.1",
-  "scripts": {},
-  "dependencies": {
-    "fastify": "^4.0.0"
-  },
-  "devDependencies": {
-    "typescript": "^5.0.0",
-    "tsx": "^4.0.0"
-  }
-}
-```
-
-**project.json**
-```json
-{
-  "name": "api-gateway",
-  "projectType": "application",
-  "root": "services/api-gateway",
-  "sourceRoot": "services/api-gateway/src",
-  "tags": ["scope:backend", "type:service", "lang:ts"],
-  "targets": {
-    "build": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsc -p tsconfig.json",
-        "cwd": "{projectRoot}"
-      },
-      "outputs": ["{projectRoot}/dist"]
-    },
-    "serve": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx watch src/index.ts",
-        "cwd": "{projectRoot}"
-      }
-    },
-    "test": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "vitest run",
-        "cwd": "{projectRoot}"
-      }
-    },
-    "lint": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "eslint src --ext .ts",
-        "cwd": "{projectRoot}"
-      }
-    },
-    "docker:build": {
-      "executor": "nx:run-commands",
-      "dependsOn": ["build"],
-      "options": {
-        "command": "docker build -t monorepo/api-gateway:latest .",
-        "cwd": "{projectRoot}"
-      }
-    }
-  }
-}
-```
-
----
-
-### 6.2 Go Service
-
-**Structure:** `services/auth/`
-
-```
-services/auth/
 ├── cmd/
 │   └── main.go
 ├── internal/
 │   ├── handlers/
-│   └── middleware/
+│   ├── middleware/
+│   └── proxy/
 ├── go.mod
 ├── go.sum
 ├── project.json
@@ -404,27 +323,23 @@ services/auth/
 
 **go.mod**
 ```
-module github.com/yourorg/monorepo/services/auth
+module github.com/yourorg/monorepo/services/api-gateway
 
 go 1.22
-
-require (
-  github.com/gin-gonic/gin v1.10.0
-)
 ```
 
 **project.json**
 ```json
 {
-  "name": "auth",
+  "name": "api-gateway",
   "projectType": "application",
-  "root": "services/auth",
+  "root": "services/api-gateway",
   "tags": ["scope:backend", "type:service", "lang:go"],
   "targets": {
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "go build -o dist/auth ./cmd/main.go",
+        "command": "go build -o dist/api-gateway ./cmd/main.go",
         "cwd": "{projectRoot}"
       },
       "outputs": ["{projectRoot}/dist"]
@@ -453,7 +368,7 @@ require (
     "docker:build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "docker build -t monorepo/auth:latest .",
+        "command": "docker build -t monorepo/api-gateway:latest .",
         "cwd": "{projectRoot}"
       }
     }
@@ -463,6 +378,108 @@ require (
 
 > Note: Go has its own module system. The monorepo `pnpm-workspace.yaml` does NOT include Go services.
 > Nx only orchestrates the CLI commands — Go dependency management stays with `go mod`.
+
+---
+
+### 6.2 NestJS Service — auth
+
+> NestJS is chosen for the auth service because of its first-class support for Guards, decorators, Passport.js strategies (JWT, OAuth2), and a structured module system that keeps auth logic clean and testable.
+
+**Structure:** `services/auth/`
+
+```
+services/auth/
+├── src/
+│   ├── main.ts
+│   ├── app.module.ts
+│   ├── auth/
+│   │   ├── auth.module.ts
+│   │   ├── auth.controller.ts
+│   │   ├── auth.service.ts
+│   │   └── strategies/
+│   │       ├── jwt.strategy.ts
+│   │       └── local.strategy.ts
+│   └── users/
+├── package.json
+├── tsconfig.json
+├── project.json
+└── Dockerfile
+```
+
+**package.json**
+```json
+{
+  "name": "@monorepo/auth",
+  "version": "0.0.1",
+  "scripts": {},
+  "dependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/jwt": "^10.0.0",
+    "@nestjs/passport": "^10.0.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "passport-local": "^1.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.0.0",
+    "@nestjs/testing": "^10.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  }
+}
+```
+
+**project.json**
+```json
+{
+  "name": "auth",
+  "projectType": "application",
+  "root": "services/auth",
+  "sourceRoot": "services/auth/src",
+  "tags": ["scope:backend", "type:service", "lang:ts"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest build",
+        "cwd": "{projectRoot}"
+      },
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "nest start --watch",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "jest",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint src --ext .ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "docker:build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -t monorepo/auth:latest .",
+        "cwd": "{projectRoot}"
+      }
+    }
+  }
+}
+```
 
 ---
 
@@ -1068,7 +1085,7 @@ Nx builds a project graph from:
 For non-JS projects (Go, Python, Java), Nx cannot auto-detect deps. Use `implicitDependencies`:
 
 ```json
-// services/auth/project.json
+// services/api-gateway/project.json
 {
   "implicitDependencies": ["packages-proto"]
 }
@@ -1302,7 +1319,23 @@ nx generate @monorepo/generators:app --name=portal --framework=react --port=3005
 
 Each service/app contains its own `Dockerfile`. Stored in the project root.
 
-**Node.js Dockerfile** (`services/api-gateway/Dockerfile`):
+**Go Dockerfile** (`services/api-gateway/Dockerfile`):
+```dockerfile
+FROM golang:1.22-alpine AS builder
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o dist/api-gateway ./cmd/main.go
+
+FROM alpine:3.20
+WORKDIR /app
+COPY --from=builder /app/dist/api-gateway .
+EXPOSE 8000
+CMD ["./api-gateway"]
+```
+
+**NestJS Dockerfile** (`services/auth/Dockerfile`):
 ```dockerfile
 FROM node:22-alpine AS builder
 WORKDIR /app
@@ -1315,24 +1348,8 @@ FROM node:22-alpine
 WORKDIR /app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
-EXPOSE 8000
-CMD ["node", "dist/index.js"]
-```
-
-**Go Dockerfile** (`services/auth/Dockerfile`):
-```dockerfile
-FROM golang:1.22-alpine AS builder
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o dist/auth ./cmd/main.go
-
-FROM alpine:3.20
-WORKDIR /app
-COPY --from=builder /app/dist/auth .
 EXPOSE 8001
-CMD ["./auth"]
+CMD ["node", "dist/main.js"]
 ```
 
 **Python Dockerfile** (`services/notification/Dockerfile`):
@@ -1781,8 +1798,8 @@ docs: update NxMonorepo.md with K8s section
 # --- Development ---
 nx serve web                        # Start React app
 nx serve dashboard                  # Start Next.js app
-nx serve api-gateway                # Start Node service
-nx serve auth                       # Start Go service
+nx serve api-gateway                # Start Go gateway
+nx serve auth                       # Start NestJS auth service
 
 # --- Build ---
 nx build web                        # Build one project
