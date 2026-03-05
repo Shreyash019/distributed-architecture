@@ -32,6 +32,7 @@
     - [Docker Compose](#122-docker-compose)
     - [Kubernetes](#123-kubernetes)
     - [CI/CD (GitHub Actions)](#124-cicd-github-actions)
+    - [Nginx — Reverse Proxy & L7 Load Balancing](#125-nginx--reverse-proxy--l7-load-balancing)
 13. [Workspace Scripts](#13-workspace-scripts)
 14. [Rules and Conventions](#14-rules-and-conventions)
 
@@ -1661,6 +1662,361 @@ jobs:
       - name: Build and push Docker images (affected only)
         run: pnpm nx affected -t docker:build --configuration=production
 ```
+
+---
+
+### 12.5 Nginx — Reverse Proxy & L7 Load Balancing
+
+#### Architecture
+
+```
+Internet
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  Nginx  (port 80 / 443)                 │
+│  • SSL termination                      │
+│  • Rate limiting                        │
+│  • Gzip compression                     │
+│  • L7 path-based routing                │
+│  • Load balancing across api-gateway    │
+└──────────┬──────────────────────────────┘
+           │   upstream: api_gateway_cluster
+     ┌─────┴──────┬──────────────┐
+     ▼            ▼              ▼
+api-gateway:8000  api-gateway:8000  api-gateway:8000
+  (replica 1)      (replica 2)      (replica 3)
+           │
+           │  internal routing (Go net/http ReverseProxy)
+     ┌─────┴───────────────────────────────┐
+     ▼         ▼           ▼               ▼
+  auth:8001  notification:8002  payment:8003  ...
+```
+
+**Why two layers?**
+- **Nginx** is the public edge: SSL, rate limiting, gzip, L7 load balancing across `api-gateway` replicas
+- **api-gateway (Go)** is the internal router: path → microservice mapping, no external exposure
+
+---
+
+#### Folder Structure
+
+```
+infrastructure/
+└── nginx/
+    ├── nginx.conf              # main config (worker tuning, events)
+    ├── conf.d/
+    │   ├── upstream.conf       # upstream blocks (service clusters)
+    │   └── default.conf        # server block (locations, routing rules)
+    └── ssl/                    # certs (gitignored, managed via secrets)
+        ├── cert.pem
+        └── key.pem
+```
+
+> Add `infrastructure/nginx/ssl/` to `.gitignore`. Use Let's Encrypt / cert-manager in production.
+
+---
+
+#### `infrastructure/nginx/nginx.conf`
+
+```nginx
+# Main process config — you control every knob
+worker_processes auto;                  # one worker per CPU core
+worker_rlimit_nofile 65535;             # max open file descriptors
+
+error_log /var/log/nginx/error.log warn;
+pid       /var/run/nginx.pid;
+
+events {
+    worker_connections 4096;            # per worker
+    use epoll;                          # Linux I/O model (best for high concurrency)
+    multi_accept on;                    # accept all new connections at once
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    # Logging format
+    log_format main '$remote_addr - $remote_user [$time_local] '
+                    '"$request" $status $body_bytes_sent '
+                    '"$http_referer" "$http_user_agent" '
+                    'rt=$request_time uct=$upstream_connect_time '
+                    'uht=$upstream_header_time urt=$upstream_response_time';
+
+    access_log /var/log/nginx/access.log main;
+
+    # Performance
+    sendfile        on;
+    tcp_nopush      on;
+    tcp_nodelay     on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css application/json application/javascript
+               text/xml application/xml application/xml+rss text/javascript;
+
+    # Security headers
+    server_tokens off;                  # hide Nginx version
+
+    # Rate limiting zones (defined globally, applied per location)
+    limit_req_zone $binary_remote_addr zone=api_limit:10m rate=100r/s;
+    limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=10r/s;
+
+    # Include server blocks
+    include /etc/nginx/conf.d/*.conf;
+}
+```
+
+---
+
+#### `infrastructure/nginx/conf.d/upstream.conf`
+
+```nginx
+# L7 Load Balancing — upstream blocks
+# Each upstream = a cluster of instances of the same service
+# Nginx distributes requests across them at layer 7 (HTTP)
+
+upstream api_gateway_cluster {
+    # Algorithm options (uncomment one):
+    # round-robin     → default, no keyword needed. Equal distribution.
+    # least_conn;     → send to instance with fewest active connections
+    # ip_hash;        → sticky sessions — same client IP always hits same server
+    least_conn;
+
+    # In Docker Compose: scale with `docker compose up --scale api-gateway=3`
+    # Nginx resolves the hostname to all container IPs automatically
+    server api-gateway:8000 weight=1 max_fails=3 fail_timeout=30s;
+
+    # For local multi-instance testing (manual):
+    # server api-gateway-1:8000 weight=1 max_fails=3 fail_timeout=30s;
+    # server api-gateway-2:8000 weight=1 max_fails=3 fail_timeout=30s;
+    # server api-gateway-3:8000 weight=1 max_fails=3 fail_timeout=30s;
+
+    # Keepalive connections to upstream (avoid TCP handshake per request)
+    keepalive 32;
+}
+
+# Direct upstream per service (used if Nginx routes directly, bypassing api-gateway)
+# Only needed if you want Nginx to do path-based routing without api-gateway
+upstream auth_cluster {
+    least_conn;
+    server auth:8001 max_fails=3 fail_timeout=30s;
+    keepalive 16;
+}
+
+upstream notification_cluster {
+    least_conn;
+    server notification:8002 max_fails=3 fail_timeout=30s;
+    keepalive 16;
+}
+
+upstream payment_cluster {
+    least_conn;
+    server payment:8003 max_fails=3 fail_timeout=30s;
+    keepalive 16;
+}
+```
+
+---
+
+#### `infrastructure/nginx/conf.d/default.conf`
+
+```nginx
+# HTTP → redirect to HTTPS (production)
+server {
+    listen 80;
+    server_name _;
+
+    # In local dev: serve HTTP directly (comment out the redirect below)
+    # In production: force HTTPS
+    return 301 https://$host$request_uri;
+}
+
+# Main server block
+server {
+    listen 443 ssl http2;               # HTTP/2 for performance
+    server_name api.yourdomain.com;     # replace with your domain
+
+    # SSL (production: Let's Encrypt via cert-manager)
+    ssl_certificate     /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # Security headers
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # Proxy timeouts
+    proxy_connect_timeout 10s;
+    proxy_send_timeout    60s;
+    proxy_read_timeout    60s;
+
+    # Pass real client IP to upstream
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # Keepalive to upstream
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+
+    # ── L7 Routing ──────────────────────────────────────────────────
+    # All traffic → api-gateway cluster (recommended: api-gateway handles routing)
+    location / {
+        limit_req zone=api_limit burst=200 nodelay;
+        proxy_pass http://api_gateway_cluster;
+    }
+
+    # Auth endpoints: tighter rate limit (brute force protection)
+    location /auth/ {
+        limit_req zone=auth_limit burst=20 nodelay;
+        proxy_pass http://api_gateway_cluster;
+    }
+
+    # Health check endpoint (no rate limiting, no auth)
+    location /health {
+        access_log off;
+        proxy_pass http://api_gateway_cluster;
+    }
+
+    # Nginx own status page (internal only)
+    location /nginx-status {
+        stub_status on;
+        allow 127.0.0.1;
+        deny all;
+    }
+}
+
+# ── Local Dev Server (HTTP only, no SSL) ────────────────────────────
+# Use this block instead of the two above when running locally
+# Uncomment and comment out the two blocks above
+
+# server {
+#     listen 80;
+#     server_name localhost;
+#
+#     location / {
+#         limit_req zone=api_limit burst=200 nodelay;
+#         proxy_pass http://api_gateway_cluster;
+#         proxy_set_header Host            $host;
+#         proxy_set_header X-Real-IP       $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_http_version 1.1;
+#         proxy_set_header Connection "";
+#     }
+#
+#     location /auth/ {
+#         limit_req zone=auth_limit burst=20 nodelay;
+#         proxy_pass http://api_gateway_cluster;
+#     }
+# }
+```
+
+---
+
+#### Add Nginx to Docker Compose
+
+Update `docker-compose.yml` — add the `nginx` service and remove exposed ports from `api-gateway` (Nginx is now the only public entry point):
+
+```yaml
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"               # remove for local dev if not using SSL
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./infrastructure/nginx/ssl:/etc/nginx/ssl:ro   # remove for local dev
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    # No "ports:" here — Nginx is the only public entry point
+    # api-gateway is internal only (Docker network)
+    expose:
+      - "8000"
+    environment:
+      - AUTH_SERVICE_URL=http://auth:8001
+      - NOTIFICATION_SERVICE_URL=http://notification:8002
+      - PAYMENT_SERVICE_URL=http://payment:8003
+    depends_on:
+      - auth
+      - notification
+      - payment
+
+  # Scale api-gateway: docker compose up --scale api-gateway=3
+  # Nginx upstream will automatically load balance across all replicas
+```
+
+---
+
+#### Kubernetes — Nginx Ingress Controller
+
+In production, replace the Nginx container with the **Nginx Ingress Controller**:
+
+```bash
+# Install via Helm
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm install ingress-nginx ingress-nginx/ingress-nginx
+```
+
+`infrastructure/k8s/base/ingress.yaml`:
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monorepo-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8000
+```
+
+> In K8s, load balancing across `api-gateway` pods is handled by the **Service** (`ClusterIP` with `kube-proxy`). The Ingress controller handles edge routing and SSL.
+
+---
+
+#### L7 Load Balancing Algorithm — When to Use Which
+
+| Algorithm | Config | Use When |
+|---|---|---|
+| Round Robin | *(default)* | Stateless services, equal request weight |
+| `least_conn` | `least_conn;` | Requests vary in duration (recommended for APIs) |
+| `ip_hash` | `ip_hash;` | Need sticky sessions (avoid if using JWT — you don't) |
+| `random two least_conn` | `random two least_conn;` | Large upstream pools (10+ instances) |
+
+Since this project uses **JWT** (stateless auth), `least_conn` is the right choice — no sticky sessions needed.
 
 ---
 

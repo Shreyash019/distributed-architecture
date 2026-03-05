@@ -1,0 +1,30 @@
+{
+  "name": "auth-service",
+  "projectType": "application",
+  "root": "services/auth-service",
+  "tags": ["scope:backend", "type:service", "lang:ts"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm nest build",
+        "cwd": "{projectRoot}"
+      },
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm nest start --watch",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm jest",
+        "cwd": "{projectRoot}"
+      }
+    }
+  }
+}
