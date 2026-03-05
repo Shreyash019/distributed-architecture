@@ -1,0 +1,57 @@
+# 1. Define an explicit network so containers can definitively find each other
+networks:
+  kafka-net:
+    driver: bridge
+
+# 2. Define persistent volumes so data survives restarts
+volumes:
+  kafka-data:
+
+services:
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka-broker
+    networks:
+      - kafka-net
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-broker:9093'
+      # Bind to 0.0.0.0 so it listens on all interfaces
+      KAFKA_LISTENERS: 'INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093'
+      # Advertise specific routes: 29092 for Docker, 9092 for your laptop
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka-broker:29092,EXTERNAL://localhost:9092'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes:
+      - kafka-data:/tmp/kraft-combined-logs
+    # 3. The Healthcheck: Forces Docker to verify Kafka is actually awake
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka-ui:
+    image: kafbat/kafka-ui:latest
+    container_name: kafka-ui
+    networks:
+      - kafka-net
+    ports:
+      - "9093:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "production-grade-cluster"
+      # Point EXACTLY to the internal listener we defined above
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka-broker:29092"
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    depends_on:
+      kafka:
+        # 4. Wait for the healthcheck to pass before starting the UI
+        condition: service_healthy
