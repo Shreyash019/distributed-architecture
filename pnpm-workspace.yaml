@@ -1,7 +1,6 @@
 packages:
   - applications/*
   - services/*
-  - 'services/auth-service'
   - packages/*
   - tools/*
 
