@@ -144,3 +144,4 @@ pnpm-debug.log*
 *.temp
 *.bak
 *.orig
+.vscode
