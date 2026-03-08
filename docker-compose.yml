@@ -1,18 +1,21 @@
 # 1. Define an explicit network so containers can definitively find each other
 networks:
-  kafka-net:
+  distributed-net:
     driver: bridge
 
 # 2. Define persistent volumes so data survives restarts
 volumes:
   kafka-data:
+  postgres-data:
+  mysql-data:
+  mongo-data:
 
 services:
   kafka:
     image: apache/kafka:latest
     container_name: kafka-broker
     networks:
-      - kafka-net
+      - distributed-net
     ports:
       - "9092:9092"
     environment:
@@ -43,7 +46,7 @@ services:
     image: kafbat/kafka-ui:latest
     container_name: kafka-ui
     networks:
-      - kafka-net
+      - distributed-net
     ports:
       - "9093:8080"
     environment:
@@ -55,3 +58,114 @@ services:
       kafka:
         # 4. Wait for the healthcheck to pass before starting the UI
         condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    networks:
+      - distributed-net
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${DB_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${DB_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${DB_POSTGRES_NAME}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgbouncer:
+    image: edoburu/pgbouncer
+    container_name: pgbouncer
+    networks:
+      - distributed-net
+    ports:
+      - "6432:5432"
+    environment:
+      DB_USER: ${DB_POSTGRES_USER}
+      DB_PASSWORD: ${DB_POSTGRES_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_POSTGRES_NAME}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 100
+      DEFAULT_POOL_SIZE: 20
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    networks:
+      - distributed-net
+    ports: 
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  proxysql:
+    image: proxysql/proxysql
+    container_name: proxysql
+    networks:
+      - distributed-net
+    ports:
+      - "6033:6033"
+      - "6032:6032"
+    volumes:
+      - ./infrastructure/proxysql/proxysql.cnf:/etc/proxysql.cnf
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:7.0
+    container_name: mongo
+    networks:
+      - distributed-net
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
+    networks:
+      - distributed-net
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
