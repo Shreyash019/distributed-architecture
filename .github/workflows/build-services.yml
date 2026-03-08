@@ -2,9 +2,8 @@ name: Build Services
 
 on:
   push:
-    paths:
-      - 'services/**'
-  pull_request:
+    branches:
+      - main
     paths:
       - 'services/**'
 
@@ -61,14 +60,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install dependencies
-        run: |
-          cd services/auth-service
-          npm ci
-      - name: Build Auth Service
-        run: |
-          cd services/auth-service
-          npm run build
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - name: Install dependencies (pnpm)
+        run: pnpm install
+      - name: Build Auth Service (pnpm)
+        run: pnpm --filter "auth-service" build
 
   build-notification-service:
     name: Build Notification Service
@@ -82,11 +81,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install dependencies
-        run: |
-          cd services/notification-service
-          npm ci
-      - name: Build Notification Service
-        run: |
-          cd services/notification-service
-          npm run build
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - name: Install dependencies (pnpm)
+        run: pnpm install
+      - name: Build Notification Service (pnpm)
+        run: pnpm --filter "notification-service" build
