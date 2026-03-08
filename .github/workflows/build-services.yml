@@ -1,0 +1,92 @@
+name: Build Services
+
+on:
+  push:
+    paths:
+      - 'services/**'
+  pull_request:
+    paths:
+      - 'services/**'
+
+jobs:
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      api_gateway: ${{ steps.filter.outputs.api_gateway }}
+      auth_service: ${{ steps.filter.outputs.auth_service }}
+      notification_service: ${{ steps.filter.outputs.notification_service }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            api_gateway:
+              - 'services/api-gateway/**'
+            auth_service:
+              - 'services/auth-service/**'
+            notification_service:
+              - 'services/notification-service/**'
+
+  build-api-gateway:
+    name: Build API Gateway
+    needs: detect-changes
+    if: needs.detect-changes.outputs.api_gateway == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Build API Gateway
+        run: |
+          cd services/api-gateway
+          go build ./...
+
+  build-auth-service:
+    name: Build Auth Service
+    needs: detect-changes
+    if: needs.detect-changes.outputs.auth_service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: |
+          cd services/auth-service
+          npm ci
+      - name: Build Auth Service
+        run: |
+          cd services/auth-service
+          npm run build
+
+  build-notification-service:
+    name: Build Notification Service
+    needs: detect-changes
+    if: needs.detect-changes.outputs.notification_service == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: |
+          cd services/notification-service
+          npm ci
+      - name: Build Notification Service
+        run: |
+          cd services/notification-service
+          npm run build
