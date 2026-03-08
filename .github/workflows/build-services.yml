@@ -47,10 +47,13 @@ jobs:
         run: |
           cd services/api-gateway
           go build ./...
-      - name: Simulate ECR Push (API Gateway)
-        run: |
-          echo "Simulating build and push for API Gateway"
-          sleep 2
+      - name: Build Docker image (API Gateway)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/api-gateway
+          file: ./services/api-gateway/Dockerfile
+          push: false
+          tags: dummy-ecr/api-gateway:${{ github.sha }}
 
   build-auth-service:
     name: Build Auth Service
@@ -72,10 +75,13 @@ jobs:
         run: pnpm install
       - name: Build Auth Service (pnpm)
         run: pnpm --filter "auth-service" build
-      - name: Simulate ECR Push (Auth Service)
-        run: |
-          echo "Simulating build and push for Auth Service"
-          sleep 2
+      - name: Build Docker image (Auth Service)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/auth-service
+          file: ./services/auth-service/Dockerfile
+          push: false
+          tags: dummy-ecr/auth-service:${{ github.sha }}
 
   build-notification-service:
     name: Build Notification Service
@@ -97,7 +103,10 @@ jobs:
         run: pnpm install
       - name: Build Notification Service (pnpm)
         run: pnpm --filter "notification-service" build
-      - name: Simulate ECR Push (Notification Service)
-        run: |
-          echo "Simulating build and push for Notification Service"
-          sleep 2
+      - name: Build Docker image (Notification Service)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/notification-service
+          file: ./services/notification-service/Dockerfile
+          push: false
+          tags: dummy-ecr/notification-service:${{ github.sha }}
