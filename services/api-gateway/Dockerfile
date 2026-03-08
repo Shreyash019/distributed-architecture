@@ -1,11 +1,15 @@
-# Start from the official Golang image for building the binary
-FROM golang:1.21-alpine AS builder
-
+# Multi-stage Dockerfile for Go API Gateway
+FROM golang:1.22-alpine AS builder
 WORKDIR /app
-
-# Copy go.mod and go.sum files
-COPY go.mod go.sum ./
+COPY . .
 RUN go mod download
+RUN CGO_ENABLED=0 GOOS=linux go build -o api-gateway ./cmd/main.go
+
+FROM alpine:latest
+WORKDIR /app
+COPY --from=builder /app/api-gateway ./api-gateway
+EXPOSE 3000
+CMD ["./api-gateway"]
 
 # Copy the source code
 COPY . .
