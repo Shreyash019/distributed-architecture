@@ -169,3 +169,36 @@ services:
       mongo:
         condition: service_healthy
 
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    networks:
+      - distributed-net
+    ports:
+      - "3001:3000"
+    depends_on:
+      - auth-service
+      - notification-service
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    networks:
+      - distributed-net
+    ports:
+      - "3002:3000"
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    networks:
+      - distributed-net
+    ports:
+      - "3003:3000"
+
