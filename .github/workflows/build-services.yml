@@ -47,20 +47,10 @@ jobs:
         run: |
           cd services/api-gateway
           go build ./...
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Log in to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and Push Docker image (API Gateway)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./services/api-gateway
-          file: ./services/api-gateway/Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/api-gateway:${{ github.sha }}
+      - name: Simulate ECR Push (API Gateway)
+        run: |
+          echo "Simulating build and push for API Gateway"
+          sleep 2
 
   build-auth-service:
     name: Build Auth Service
@@ -82,20 +72,10 @@ jobs:
         run: pnpm install
       - name: Build Auth Service (pnpm)
         run: pnpm --filter "auth-service" build
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Log in to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and Push Docker image (Auth Service)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./services/auth-service
-          file: ./services/auth-service/Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/auth-service:${{ github.sha }}
+      - name: Simulate ECR Push (Auth Service)
+        run: |
+          echo "Simulating build and push for Auth Service"
+          sleep 2
 
   build-notification-service:
     name: Build Notification Service
@@ -117,17 +97,7 @@ jobs:
         run: pnpm install
       - name: Build Notification Service (pnpm)
         run: pnpm --filter "notification-service" build
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Log in to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and Push Docker image (Notification Service)
-        uses: docker/build-push-action@v5
-        with:
-          context: ./services/notification-service
-          file: ./services/notification-service/Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/notification-service:${{ github.sha }}
+      - name: Simulate ECR Push (Notification Service)
+        run: |
+          echo "Simulating build and push for Notification Service"
+          sleep 2
