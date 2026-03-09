@@ -1,6 +1,7 @@
 # Build context must be the monorepo root:
 #   docker build -f services/auth-service/Dockerfile .
 
+
 FROM node:20-alpine AS builder
 WORKDIR /app
 
