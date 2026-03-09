@@ -22,7 +22,7 @@ RUN pnpm --filter logger-ts build
 RUN pnpm --filter auth-service build
 
 # Create a self-contained deployment folder (resolves workspace symlinks)
-RUN pnpm --filter auth-service deploy --prod /deploy
+RUN pnpm --filter auth-service deploy --prod --legacy /deploy
 
 FROM node:20-alpine AS runner
 WORKDIR /app
