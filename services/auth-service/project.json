@@ -3,6 +3,7 @@
   "projectType": "application",
   "root": "services/auth-service",
   "tags": ["scope:backend", "type:service", "lang:ts"],
+  "implicitDependencies": ["logger-ts"],
   "targets": {
     "build": {
       "executor": "nx:run-commands",
@@ -10,7 +11,8 @@
         "command": "pnpm nest build",
         "cwd": "{projectRoot}"
       },
-      "outputs": ["{projectRoot}/dist"]
+      "outputs": ["{projectRoot}/dist"],
+      "dependsOn": ["^build"]
     },
     "serve": {
       "executor": "nx:run-commands",
