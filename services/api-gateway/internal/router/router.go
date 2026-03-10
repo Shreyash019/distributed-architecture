@@ -12,12 +12,16 @@ func New() (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 
 	routes := map[string]string{
-		"/auth/":         envOrDefault("AUTH_SERVICE_URL", "http://localhost:8001"),
-		"/notification/": envOrDefault("NOTIFICATION_SERVICE_URL", "http://localhost:8002"),
-		"/payment/":      envOrDefault("PAYMENT_SERVICE_URL", "http://localhost:8003"),
+		"/auth/":         "AUTH_SERVICE_URL",
+		"/notification/": "NOTIFICATION_SERVICE_URL",
+		"/payment/":      "PAYMENT_SERVICE_URL",
 	}
 
-	for prefix, upstream := range routes {
+	for prefix, envKey := range routes {
+		upstream, err := requireEnv(envKey)
+		if err != nil {
+			return nil, err
+		}
 		p, err := proxy.New(upstream)
 		if err != nil {
 			return nil, fmt.Errorf("invalid upstream for %s: %w", prefix, err)
@@ -33,9 +37,10 @@ func New() (*http.ServeMux, error) {
 	return mux, nil
 }
 
-func envOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+func requireEnv(key string) (string, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return "", fmt.Errorf("required environment variable %q is not set", key)
 	}
-	return fallback
+	return v, nil
 }

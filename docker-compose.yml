@@ -1,7 +1,7 @@
 # 1. Define an explicit network so containers can definitively find each other
 networks:
   distributed-net:
-    driver: bridge
+    driver: ${DOCKER_NETWORK_DRIVER}
 
 # 2. Define persistent volumes so data survives restarts
 volumes:
@@ -12,60 +12,60 @@ volumes:
 
 services:
   kafka:
-    image: apache/kafka:latest
-    container_name: kafka-broker
+    image: ${KAFKA_IMAGE}
+    container_name: ${KAFKA_CONTAINER_NAME}
     networks:
       - distributed-net
     ports:
-      - "9092:9092"
+      - "${KAFKA_PORT_HOST}:${KAFKA_PORT_CONTAINER_EXTERNAL}"
     environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-broker:9093'
+      KAFKA_NODE_ID: ${KAFKA_NODE_ID}
+      KAFKA_PROCESS_ROLES: ${KAFKA_PROCESS_ROLES}
+      KAFKA_CONTROLLER_QUORUM_VOTERS: ${KAFKA_CONTROLLER_QUORUM_VOTERS}
       # Bind to 0.0.0.0 so it listens on all interfaces
-      KAFKA_LISTENERS: 'INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093'
+      KAFKA_LISTENERS: ${KAFKA_LISTENERS}
       # Advertise specific routes: 29092 for Docker, 9092 for your laptop
-      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka-broker:29092,EXTERNAL://localhost:9092'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_ADVERTISED_LISTENERS: ${KAFKA_ADVERTISED_LISTENERS}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ${KAFKA_LISTENER_SECURITY_PROTOCOL_MAP}
+      KAFKA_INTER_BROKER_LISTENER_NAME: ${KAFKA_INTER_BROKER_LISTENER_NAME}
+      KAFKA_CONTROLLER_LISTENER_NAMES: ${KAFKA_CONTROLLER_LISTENER_NAMES}
+      KAFKA_CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: ${KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR}
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: ${KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR}
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: ${KAFKA_TRANSACTION_STATE_LOG_MIN_ISR}
     volumes:
       - kafka-data:/tmp/kraft-combined-logs
     # 3. The Healthcheck: Forces Docker to verify Kafka is actually awake
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server localhost:9092 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "${KAFKA_HEALTHCHECK_CMD}"]
+      interval: ${KAFKA_HEALTHCHECK_INTERVAL}
+      timeout: ${KAFKA_HEALTHCHECK_TIMEOUT}
+      retries: ${KAFKA_HEALTHCHECK_RETRIES}
 
   kafka-ui:
-    image: kafbat/kafka-ui:latest
-    container_name: kafka-ui
+    image: ${KAFKA_UI_IMAGE}
+    container_name: ${KAFKA_UI_CONTAINER_NAME}
     networks:
       - distributed-net
     ports:
-      - "9093:8080"
+      - "${KAFKA_UI_PORT_HOST}:${KAFKA_UI_PORT_CONTAINER}"
     environment:
-      KAFKA_CLUSTERS_0_NAME: "production-grade-cluster"
+      KAFKA_CLUSTERS_0_NAME: ${KAFKA_UI_CLUSTER_NAME}
       # Point EXACTLY to the internal listener we defined above
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka-broker:29092"
-      DYNAMIC_CONFIG_ENABLED: 'true'
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: ${KAFKA_UI_BOOTSTRAP_SERVERS}
+      DYNAMIC_CONFIG_ENABLED: ${KAFKA_UI_DYNAMIC_CONFIG_ENABLED}
     depends_on:
       kafka:
         # 4. Wait for the healthcheck to pass before starting the UI
         condition: service_healthy
 
   postgres:
-    image: postgres:16-alpine
-    container_name: postgres
+    image: ${POSTGRES_IMAGE}
+    container_name: ${POSTGRES_CONTAINER_NAME}
     networks:
       - distributed-net
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT_HOST}:${POSTGRES_PORT}"
     environment:
       POSTGRES_USER: ${DB_POSTGRES_USER}
       POSTGRES_PASSWORD: ${DB_POSTGRES_PASSWORD}
@@ -73,38 +73,39 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "${POSTGRES_HEALTHCHECK_CMD}"]
+      interval: ${POSTGRES_HEALTHCHECK_INTERVAL}
+      timeout: ${POSTGRES_HEALTHCHECK_TIMEOUT}
+      retries: ${POSTGRES_HEALTHCHECK_RETRIES}
 
   pgbouncer:
-    image: edoburu/pgbouncer
-    container_name: pgbouncer
+    image: ${PGBOUNCER_IMAGE}
+    container_name: ${PGBOUNCER_CONTAINER_NAME}
     networks:
       - distributed-net
     ports:
-      - "6432:5432"
+      - "${PGBOUNCER_PORT_HOST}:${PGBOUNCER_PORT_CONTAINER}"
     environment:
       DB_USER: ${DB_POSTGRES_USER}
       DB_PASSWORD: ${DB_POSTGRES_PASSWORD}
-      DB_HOST: postgres
-      DB_PORT: 5432
+      DB_HOST: ${PGBOUNCER_DB_HOST}
+      DB_PORT: ${POSTGRES_PORT}
       DB_NAME: ${DB_POSTGRES_NAME}
-      POOL_MODE: transaction
-      MAX_CLIENT_CONN: 100
-      DEFAULT_POOL_SIZE: 20
+      AUTH_TYPE: ${PGBOUNCER_AUTH_TYPE}
+      POOL_MODE: ${PGBOUNCER_POOL_MODE}
+      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN}
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE}
     depends_on:
       postgres:
         condition: service_healthy
 
   mysql:
-    image: mysql:8.0
-    container_name: mysql
+    image: ${MYSQL_IMAGE}
+    container_name: ${MYSQL_CONTAINER_NAME}
     networks:
       - distributed-net
     ports: 
-      - "3306:3306"
+      - "${MYSQL_PORT_HOST}:${MYSQL_PORT_CONTAINER}"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -113,20 +114,20 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      test: ["CMD", "mysqladmin", "ping", "-h", "${MYSQL_HEALTHCHECK_HOST}"]
+      interval: ${MYSQL_HEALTHCHECK_INTERVAL}
+      timeout: ${MYSQL_HEALTHCHECK_TIMEOUT}
+      retries: ${MYSQL_HEALTHCHECK_RETRIES}
+      start_period: ${MYSQL_HEALTHCHECK_START_PERIOD}
 
   proxysql:
-    image: proxysql/proxysql
-    container_name: proxysql
+    image: ${PROXYSQL_IMAGE}
+    container_name: ${PROXYSQL_CONTAINER_NAME}
     networks:
       - distributed-net
     ports:
-      - "6033:6033"
-      - "6032:6032"
+      - "${PROXYSQL_PORT_HOST}:${PROXYSQL_PORT_CONTAINER}"
+      - "${PROXYSQL_ADMIN_PORT_HOST}:${PROXYSQL_ADMIN_PORT_CONTAINER}"
     volumes:
       - ./infrastructure/proxysql/proxysql.cnf:/etc/proxysql.cnf
     depends_on:
@@ -134,12 +135,12 @@ services:
         condition: service_healthy
 
   mongo:
-    image: mongo:7.0
-    container_name: mongo
+    image: ${MONGO_IMAGE}
+    container_name: ${MONGO_CONTAINER_NAME}
     networks:
       - distributed-net
     ports:
-      - "27017:27017"
+      - "${MONGO_PORT_HOST}:${MONGO_PORT_CONTAINER}"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
@@ -147,24 +148,24 @@ services:
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      test: ["CMD-SHELL", "${MONGO_HEALTHCHECK_CMD}"]
+      interval: ${MONGO_HEALTHCHECK_INTERVAL}
+      timeout: ${MONGO_HEALTHCHECK_TIMEOUT}
+      retries: ${MONGO_HEALTHCHECK_RETRIES}
+      start_period: ${MONGO_HEALTHCHECK_START_PERIOD}
 
   mongo-express:
-    image: mongo-express:latest
-    container_name: mongo-express
+    image: ${MONGO_EXPRESS_IMAGE}
+    container_name: ${MONGO_EXPRESS_CONTAINER_NAME}
     networks:
       - distributed-net
     ports:
-      - "8081:8081"
+      - "${MONGO_EXPRESS_PORT_HOST}:${MONGO_EXPRESS_PORT_CONTAINER}"
     environment:
       ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_INITDB_ROOT_USERNAME}
       ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/
-      ME_CONFIG_BASICAUTH: "false"
+      ME_CONFIG_MONGODB_URL: ${MONGO_EXPRESS_MONGODB_URL}
+      ME_CONFIG_BASICAUTH: ${MONGO_EXPRESS_BASICAUTH}
     depends_on:
       mongo:
         condition: service_healthy
@@ -173,32 +174,47 @@ services:
     build:
       context: ./services/api-gateway
       dockerfile: Dockerfile
-    container_name: api-gateway
+    container_name: ${API_GATEWAY_CONTAINER_NAME}
     networks:
       - distributed-net
     ports:
-      - "3001:3000"
+      - "${DOCKER_API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
+    environment:
+      PORT: ${API_GATEWAY_PORT}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL}
+      PAYMENT_SERVICE_URL: ${PAYMENT_SERVICE_URL}
     depends_on:
       - auth-service
       - notification-service
 
   auth-service:
     build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
-    container_name: auth-service
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: ${AUTH_SERVICE_CONTAINER_NAME}
     networks:
       - distributed-net
-    ports:
-      - "3002:3000"
+    expose:
+      - "${AUTH_SERVICE_PORT}"
+    environment:
+      AUTH_SERVICE_PORT: ${AUTH_SERVICE_PORT}
+      DB_POSTGRES_HOST: ${DB_POSTGRES_HOST}
+      DB_POSTGRES_PORT: ${DB_POSTGRES_PORT_CONTAINER}
+      DB_POSTGRES_USER: ${DB_POSTGRES_USER}
+      DB_POSTGRES_PASSWORD: ${DB_POSTGRES_PASSWORD}
+      DB_POSTGRES_NAME: ${DB_POSTGRES_NAME}
+      DB_POSTGRES_POOL_MAX: ${DB_POSTGRES_POOL_MAX}
 
   notification-service:
     build:
-      context: ./services/notification-service
-      dockerfile: Dockerfile
-    container_name: notification-service
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: ${NOTIFICATION_SERVICE_CONTAINER_NAME}
     networks:
       - distributed-net
-    ports:
-      - "3003:3000"
+    expose:
+      - "${NOTIFICATION_SERVICE_PORT}"
+    environment:
+      NOTIFICATION_SERVICE_PORT: ${NOTIFICATION_SERVICE_PORT}
 

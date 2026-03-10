@@ -96,3 +96,97 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## Monorepo Type Resolution Fix (March 2026)
+
+### Issue
+
+ESLint reported:
+
+`@typescript-eslint/no-unsafe-call`
+
+on the `createTypeOrmConfig(...)` call in `src/databases/TypeOrmModule.ts` even though the function is typed in the shared workspace package.
+
+### Root cause
+
+Type-aware linting in the monorepo could not consistently resolve callable types imported from `postgres-connector-ts` when using parser `projectService` and package metadata without explicit `exports`.
+
+### Fixes applied
+
+1. Updated auth-service ESLint parser settings to use explicit TypeScript project:
+  - File: `services/auth-service/eslint.config.mjs`
+  - Change: `parserOptions.projectService: true` -> `parserOptions.project: ['./tsconfig.json']`
+2. Added explicit package export map in shared package metadata:
+  - File: `packages/postgres-connector-ts/package.json`
+  - Added `exports` with `types`, `require`, and `default` for `.`
+  - Added `files: ["dist"]`
+3. Kept package compiler settings aligned for NodeNext resolution:
+  - File: `packages/postgres-connector-ts/tsconfig.json`
+  - Uses `module: "nodenext"` and `moduleResolution: "nodenext"`
+
+### Verification
+
+Run:
+
+```bash
+pnpm nx lint auth-service
+```
+
+Expected result:
+
+- No `no-unsafe-call` error in `src/databases/TypeOrmModule.ts`.
+- Lint may still show unrelated warnings (for example `no-floating-promises` in `src/main.ts`).
+
+### Why this is the preferred fix
+
+- Avoids bypassing package boundaries with deep relative imports.
+- Keeps workspace packages consumable via stable public entrypoints.
+- Uses explicit parser project config, which is a common and reliable setup for type-aware linting in monorepos.
+
+## PgBouncer Pooling Fix (March 2026)
+
+### Issue
+
+`TypeOrmModule` failed to connect with:
+
+`server login failed: wrong password type`
+
+while connecting through PgBouncer.
+
+### Root cause
+
+PostgreSQL 16 default auth is SCRAM, but PgBouncer was configured with `auth_type=md5`.
+That mismatch caused upstream server authentication to fail.
+
+### Fixes applied
+
+1. Updated PgBouncer auth type to SCRAM:
+  - File: `docker-compose.yml`
+  - Service: `pgbouncer`
+  - Added env: `AUTH_TYPE: scram-sha-256`
+2. Kept pooled routing enabled in local/dev envs:
+  - File: `.env`
+  - `DB_POSTGRES_HOST=pgbouncer`
+  - `DB_POSTGRES_PORT=6432`
+3. Kept auth-service local env aligned with PgBouncer:
+  - File: `services/auth-service/.env`
+  - `DB_POSTGRES_PORT=6432`
+
+### Verification
+
+```bash
+docker compose up -d postgres pgbouncer auth-service
+docker compose logs --no-color --tail=120 pgbouncer
+docker compose logs --no-color --tail=120 auth-service
+```
+
+Expected result:
+
+- PgBouncer startup output includes `auth_type = scram-sha-256`.
+- auth-service starts without `TypeOrmModule` retry failures.
+- No `wrong password type` / `cannot do SCRAM authentication` in PgBouncer logs.
+
+### Notes
+
+- Keep PgBouncer in `transaction` pool mode for stateless API workloads.
+- If credentials rotate, recreate `pgbouncer` so generated auth files are refreshed.

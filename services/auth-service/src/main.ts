@@ -5,10 +5,13 @@ import { LoggingInterceptor } from './interceptors/logging.interceptor';
 import { LoggerService } from 'logger-ts';
 
 async function bootstrap() {
+  const port = process.env.AUTH_SERVICE_PORT;
+  if (!port)
+    throw new Error('AUTH_SERVICE_PORT environment variable is not set');
+
   const app = await NestFactory.create(AppModule);
   app.useGlobalFilters(new AllExceptionsFilter(app.get(LoggerService)));
   app.useGlobalInterceptors(new LoggingInterceptor(app.get(LoggerService)));
-  console.log('Auth Service');
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(port);
 }
 bootstrap();

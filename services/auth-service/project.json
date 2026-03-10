@@ -3,7 +3,7 @@
   "projectType": "application",
   "root": "services/auth-service",
   "tags": ["scope:backend", "type:service", "lang:ts"],
-  "implicitDependencies": ["logger-ts"],
+  "implicitDependencies": ["postgres-connector-ts", "logger-ts"],
   "targets": {
     "build": {
       "executor": "nx:run-commands",
