@@ -30,5 +30,5 @@ WORKDIR /app
 # /deploy contains dist/, node_modules/, package.json — no symlinks, no workspace refs
 COPY --from=builder /deploy ./
 
-EXPOSE 3000
+EXPOSE ${AUTH_SERVICE_PORT}
 CMD ["node", "dist/main.js"]

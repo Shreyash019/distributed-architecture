@@ -101,15 +101,15 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 8
-      - name: Install dependencies (pnpm)
-        run: pnpm install
-      - name: Build Notification Service (pnpm)
+          version: 10
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build Notification Service
         run: pnpm --filter "notification-service" build
       - name: Build Docker image (Notification Service)
         uses: docker/build-push-action@v5
         with:
-          context: ./services/notification-service
+          context: .
           file: ./services/notification-service/Dockerfile
           push: false
           tags: dummy-ecr/notification-service:${{ github.sha }}

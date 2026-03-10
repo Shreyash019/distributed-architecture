@@ -147,7 +147,7 @@ services:
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" || exit 1"]
+      test: ["CMD-SHELL", "mongosh --quiet -u $$MONGO_INITDB_ROOT_USERNAME -p $$MONGO_INITDB_ROOT_PASSWORD --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -177,28 +177,37 @@ services:
     networks:
       - distributed-net
     ports:
-      - "3001:3000"
+      - "${DOCKER_API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
+    environment:
+      PORT: ${API_GATEWAY_PORT}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL}
+      PAYMENT_SERVICE_URL: ${PAYMENT_SERVICE_URL}
     depends_on:
       - auth-service
       - notification-service
 
   auth-service:
     build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/auth-service/Dockerfile
     container_name: auth-service
     networks:
       - distributed-net
-    ports:
-      - "3002:3000"
+    expose:
+      - "${AUTH_SERVICE_PORT}"
+    environment:
+      AUTH_SERVICE_PORT: ${AUTH_SERVICE_PORT}
 
   notification-service:
     build:
-      context: ./services/notification-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/notification-service/Dockerfile
     container_name: notification-service
     networks:
       - distributed-net
-    ports:
-      - "3003:3000"
+    expose:
+      - "${NOTIFICATION_SERVICE_PORT}"
+    environment:
+      NOTIFICATION_SERVICE_PORT: ${NOTIFICATION_SERVICE_PORT}
 
