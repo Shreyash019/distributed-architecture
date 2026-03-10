@@ -18,6 +18,16 @@ docker compose up -d
 docker compose config
 ```
 
+## Quick Start (3 Commands)
+
+```bash
+cp .env.example .env
+docker compose up -d
+docker compose ps
+```
+
+If needed, edit `.env` before running `docker compose up -d`.
+
 ## 2. Variable Groups
 
 ### Docker network
@@ -145,7 +155,27 @@ docker compose config
 - `NOTIFICATION_SERVICE_URL`
 - `PAYMENT_SERVICE_URL`
 
-## 3. Important Port Rule (PgBouncer)
+## 3. Service and Package Alignment
+
+All runtime services are now env-driven, and service templates are aligned:
+
+- API Gateway:
+	- Reads `PORT` or `API_GATEWAY_PORT` (no hardcoded fallback).
+	- Uses `AUTH_SERVICE_URL`, `NOTIFICATION_SERVICE_URL`, `PAYMENT_SERVICE_URL`.
+	- Template file: `services/api-gateway/.env.example`.
+- Auth Service:
+	- Uses `AUTH_SERVICE_PORT` and `DB_POSTGRES_*` variables.
+	- Template file: `services/auth-service/.env.example`.
+- Notification Service:
+	- Uses `NOTIFICATION_SERVICE_PORT`.
+	- Template file: `services/notification-service/.env.example`.
+
+Packages status:
+
+- `packages/logger-ts` and `packages/postgres-connector-ts` do not require package-local `.env` files.
+- Package behavior is configured by service-level environment variables that are passed at runtime.
+
+## 4. Important Port Rule (PgBouncer)
 
 Use separate variables for host and container scopes:
 
@@ -154,7 +184,7 @@ Use separate variables for host and container scopes:
 
 `auth-service` in Docker uses `DB_POSTGRES_PORT_CONTAINER`.
 
-## 4. Team Workflow
+## 5. Team Workflow
 
 1. Keep shared defaults in `.env`.
 2. Override sensitive or machine-specific values with your local environment tooling.

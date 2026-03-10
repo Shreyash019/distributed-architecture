@@ -18,7 +18,10 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8000"
+		port = os.Getenv("API_GATEWAY_PORT")
+	}
+	if port == "" {
+		log.Fatal("required environment variable PORT or API_GATEWAY_PORT is not set")
 	}
 
 	srv := &http.Server{
