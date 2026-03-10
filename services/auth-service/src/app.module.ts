@@ -4,9 +4,14 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { LoggerModule } from './logger/logger.module';
 import { RequestTimingMiddleware } from './middleware/request-timing.middleware';
+import { TypeOrmRootModule } from './databases/TypeOrmModule';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), LoggerModule],
+  imports: [
+    TypeOrmRootModule,
+    ConfigModule.forRoot({ isGlobal: true }),
+    LoggerModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -76,6 +76,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build logger-ts
         run: pnpm --filter "logger-ts" build
+      - name: Build postgres-connector-ts
+        run: pnpm --filter "postgres-connector-ts" build
       - name: Build Auth Service
         run: pnpm --filter "auth-service" build
       - name: Build Docker image (Auth Service)
