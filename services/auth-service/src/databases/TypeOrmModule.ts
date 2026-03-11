@@ -2,6 +2,7 @@ import { DynamicModule, Logger } from '@nestjs/common';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { DataSource, DataSourceOptions } from 'typeorm';
 import { createTypeOrmConfig } from 'postgres-connector-ts';
+import { AuthUser, UserProfile } from './auth-service.entity';
 
 const logger = new Logger('TypeOrmModule');
 
@@ -35,7 +36,7 @@ const dbConfig: DataSourceOptions = createTypeOrmConfig(
     database: dbName,
     max: dbPoolMax,
   },
-  [],
+  [AuthUser, UserProfile],
 ) as unknown as DataSourceOptions;
 
 export const TypeOrmRootModule: DynamicModule = TypeOrmModule.forRootAsync({
