@@ -12,9 +12,9 @@ func New() (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 
 	routes := map[string]string{
-		"/auth/":         "AUTH_SERVICE_URL",
-		"/notification/": "NOTIFICATION_SERVICE_URL",
-		"/payment/":      "PAYMENT_SERVICE_URL",
+		"/auth":         "AUTH_SERVICE_URL",
+		"/notification": "NOTIFICATION_SERVICE_URL",
+		"/payment":      "PAYMENT_SERVICE_URL",
 	}
 
 	for prefix, envKey := range routes {
@@ -26,7 +26,10 @@ func New() (*http.ServeMux, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid upstream for %s: %w", prefix, err)
 		}
+
+		// Register both base and subtree patterns so /service does not redirect to /service/.
 		mux.Handle(prefix, http.StripPrefix(prefix, p))
+		mux.Handle(prefix+"/", http.StripPrefix(prefix, p))
 	}
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
