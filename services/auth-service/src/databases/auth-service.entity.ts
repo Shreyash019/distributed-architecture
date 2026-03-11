@@ -4,8 +4,8 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToOne,
-  JoinColumn,
+  // OneToOne,
+  // JoinColumn,
 } from 'typeorm';
 
 @Entity('auth_user')
@@ -34,36 +34,36 @@ export class AuthUser {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // Optional: navigation property
-  @OneToOne(() => UserProfile, (profile) => profile.user, { cascade: true })
-  profile: UserProfile;
+  // // Optional: navigation property
+  // @OneToOne(() => UserProfile, (profile) => profile.user, { cascade: true })
+  // profile: UserProfile;
 }
 
-// UserProfile entity (can be shared)
-@Entity('user_profile')
-export class UserProfile {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+// // UserProfile entity (can be shared)
+// @Entity('user_profile')
+// export class UserProfile {
+//   @PrimaryGeneratedColumn('uuid')
+//   id: string;
 
-  @Column()
-  userId: string; // FK to AuthUser
+//   @Column()
+//   userId: string; // FK to AuthUser
 
-  @OneToOne(() => AuthUser, (user) => user.profile)
-  @JoinColumn({ name: 'userId' })
-  user: AuthUser;
+//   @OneToOne(() => AuthUser, (user) => user.profile)
+//   @JoinColumn({ name: 'userId' })
+//   user: AuthUser;
 
-  @Column({ nullable: true })
-  name: string;
+//   @Column({ nullable: true })
+//   name: string;
 
-  @Column({ nullable: true })
-  avatar: string;
+//   @Column({ nullable: true })
+//   avatar: string;
 
-  @Column({ nullable: true })
-  bio: string;
+//   @Column({ nullable: true })
+//   bio: string;
 
-  @CreateDateColumn()
-  createdAt: Date;
+//   @CreateDateColumn()
+//   createdAt: Date;
 
-  @UpdateDateColumn()
-  updatedAt: Date;
-}
+//   @UpdateDateColumn()
+//   updatedAt: Date;
+// }

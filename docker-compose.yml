@@ -214,6 +214,7 @@ services:
       DB_POSTGRES_PASSWORD: ${DB_POSTGRES_PASSWORD}
       DB_POSTGRES_NAME: ${DB_POSTGRES_NAME}
       DB_POSTGRES_POOL_MAX: ${DB_POSTGRES_POOL_MAX}
+      JWT_SECRET: ${JWT_SECRET}
     healthcheck:
       test:
         [
