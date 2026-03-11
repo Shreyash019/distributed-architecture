@@ -95,6 +95,15 @@ services:
       POOL_MODE: ${PGBOUNCER_POOL_MODE}
       MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN}
       DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h localhost -p ${PGBOUNCER_PORT_CONTAINER} -U ${DB_POSTGRES_USER} -d ${DB_POSTGRES_NAME} || exit 1",
+        ]
+      interval: ${PGBOUNCER_HEALTHCHECK_INTERVAL}
+      timeout: ${PGBOUNCER_HEALTHCHECK_TIMEOUT}
+      retries: ${PGBOUNCER_HEALTHCHECK_RETRIES}
     depends_on:
       postgres:
         condition: service_healthy
@@ -104,7 +113,7 @@ services:
     container_name: ${MYSQL_CONTAINER_NAME}
     networks:
       - distributed-net
-    ports: 
+    ports:
       - "${MYSQL_PORT_HOST}:${MYSQL_PORT_CONTAINER}"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -174,25 +183,25 @@ services:
     build:
       context: ./services/api-gateway
       dockerfile: Dockerfile
-    container_name: ${API_GATEWAY_CONTAINER_NAME}
     networks:
       - distributed-net
-    ports:
-      - "${DOCKER_API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
+    expose:
+      - "${API_GATEWAY_PORT}"
     environment:
       PORT: ${API_GATEWAY_PORT}
-      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
-      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL}
+      AUTH_SERVICE_URL: http://auth-service:${AUTH_SERVICE_PORT}
+      NOTIFICATION_SERVICE_URL: http://notification-service:${NOTIFICATION_SERVICE_PORT}
       PAYMENT_SERVICE_URL: ${PAYMENT_SERVICE_URL}
     depends_on:
-      - auth-service
-      - notification-service
+      auth-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
 
   auth-service:
     build:
       context: .
       dockerfile: services/auth-service/Dockerfile
-    container_name: ${AUTH_SERVICE_CONTAINER_NAME}
     networks:
       - distributed-net
     expose:
@@ -205,6 +214,19 @@ services:
       DB_POSTGRES_PASSWORD: ${DB_POSTGRES_PASSWORD}
       DB_POSTGRES_NAME: ${DB_POSTGRES_NAME}
       DB_POSTGRES_POOL_MAX: ${DB_POSTGRES_POOL_MAX}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:${AUTH_SERVICE_PORT}/ || exit 1",
+        ]
+      interval: ${AUTH_SERVICE_HEALTHCHECK_INTERVAL}
+      timeout: ${AUTH_SERVICE_HEALTHCHECK_TIMEOUT}
+      retries: ${AUTH_SERVICE_HEALTHCHECK_RETRIES}
+      start_period: ${AUTH_SERVICE_HEALTHCHECK_START_PERIOD}
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
 
   notification-service:
     build:
@@ -217,4 +239,25 @@ services:
       - "${NOTIFICATION_SERVICE_PORT}"
     environment:
       NOTIFICATION_SERVICE_PORT: ${NOTIFICATION_SERVICE_PORT}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://localhost:${NOTIFICATION_SERVICE_PORT}/ || exit 1",
+        ]
+      interval: ${NOTIFICATION_SERVICE_HEALTHCHECK_INTERVAL}
+      timeout: ${NOTIFICATION_SERVICE_HEALTHCHECK_TIMEOUT}
+      retries: ${NOTIFICATION_SERVICE_HEALTHCHECK_RETRIES}
+      start_period: ${NOTIFICATION_SERVICE_HEALTHCHECK_START_PERIOD}
 
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80" # This is now the ONLY public entry point
+    networks:
+      - distributed-net
+    depends_on:
+      api-gateway:
+        condition: service_started
