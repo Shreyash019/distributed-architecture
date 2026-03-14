@@ -225,9 +225,11 @@ services:
 
   auth-service:
     build:
-      # FIXED: Narrowed build context to service directory for better caching
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+      # Context must be the monorepo root so shared packages/ are accessible.
+      # Layer caching is handled inside the Dockerfile by separating manifest-only
+      # COPY steps from source COPY steps — not by narrowing the context.
+      context: .
+      dockerfile: services/auth-service/Dockerfile
     networks:
       - distributed-net
     expose:
@@ -257,9 +259,8 @@ services:
 
   notification-service:
     build:
-      # FIXED: Narrowed build context
-      context: ./services/notification-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/notification-service/Dockerfile
     container_name: ${NOTIFICATION_SERVICE_CONTAINER_NAME}
     networks:
       - distributed-net

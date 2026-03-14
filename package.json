@@ -12,8 +12,8 @@
     "affected:test": "nx affected -t test",
     "graph": "nx graph",
     "auth:dev": "nx serve auth-service",
-    "docker:up": "docker-compose up --build -d",
-    "docker:down": "docker-compose down"
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down"
   },
   "keywords": [],
   "author": "",

@@ -1,17 +1,28 @@
 # Build context must be the monorepo root:
 #   docker build -f services/notification-service/Dockerfile .
+# syntax=docker/dockerfile:1
+
 
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy workspace manifest files
+# ── Install pnpm once. This layer is only invalidated when the base image changes.
+RUN npm install -g pnpm
+
+# ── DEPENDENCY LAYER ─────────────────────────────────────────────────────────
+# Copy ONLY manifest / lock files — no source code yet.
+# pnpm install below is cached and reused on every push unless a
+# package.json or pnpm-lock.yaml actually changes.
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY services/notification-service/package.json ./services/notification-service/
 
-# Copy only the packages needed for notification-service
+# Install deps — skipped on cache hit; only re-runs when manifests/lock change.
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
+
+# ── SOURCE LAYER ─────────────────────────────────────────────────────────────
+# Source changes invalidate only the layers below, never the install layer.
 COPY services/notification-service ./services/notification-service
-
-# Install all workspace dependencies
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
 
 # Build notification-service
 RUN pnpm --filter notification-service build
