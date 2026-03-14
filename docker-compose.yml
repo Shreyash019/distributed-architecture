@@ -16,15 +16,14 @@ services:
     container_name: ${KAFKA_CONTAINER_NAME}
     networks:
       - distributed-net
+    # FIXED: Bound to 127.0.0.1 to prevent public internet exposure
     ports:
-      - "${KAFKA_PORT_HOST}:${KAFKA_PORT_CONTAINER_EXTERNAL}"
+      - "127.0.0.1:${KAFKA_PORT_HOST}:${KAFKA_PORT_CONTAINER_EXTERNAL}"
     environment:
       KAFKA_NODE_ID: ${KAFKA_NODE_ID}
       KAFKA_PROCESS_ROLES: ${KAFKA_PROCESS_ROLES}
       KAFKA_CONTROLLER_QUORUM_VOTERS: ${KAFKA_CONTROLLER_QUORUM_VOTERS}
-      # Bind to 0.0.0.0 so it listens on all interfaces
       KAFKA_LISTENERS: ${KAFKA_LISTENERS}
-      # Advertise specific routes: 29092 for Docker, 9092 for your laptop
       KAFKA_ADVERTISED_LISTENERS: ${KAFKA_ADVERTISED_LISTENERS}
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: ${KAFKA_LISTENER_SECURITY_PROTOCOL_MAP}
       KAFKA_INTER_BROKER_LISTENER_NAME: ${KAFKA_INTER_BROKER_LISTENER_NAME}
@@ -35,12 +34,17 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: ${KAFKA_TRANSACTION_STATE_LOG_MIN_ISR}
     volumes:
       - kafka-data:/tmp/kraft-combined-logs
-    # 3. The Healthcheck: Forces Docker to verify Kafka is actually awake
     healthcheck:
       test: ["CMD-SHELL", "${KAFKA_HEALTHCHECK_CMD}"]
       interval: ${KAFKA_HEALTHCHECK_INTERVAL}
       timeout: ${KAFKA_HEALTHCHECK_TIMEOUT}
       retries: ${KAFKA_HEALTHCHECK_RETRIES}
+    # FIXED: Added resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2G
 
   kafka-ui:
     image: ${KAFKA_UI_IMAGE}
@@ -48,15 +52,13 @@ services:
     networks:
       - distributed-net
     ports:
-      - "${KAFKA_UI_PORT_HOST}:${KAFKA_UI_PORT_CONTAINER}"
+      - "127.0.0.1:${KAFKA_UI_PORT_HOST}:${KAFKA_UI_PORT_CONTAINER}"
     environment:
       KAFKA_CLUSTERS_0_NAME: ${KAFKA_UI_CLUSTER_NAME}
-      # Point EXACTLY to the internal listener we defined above
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: ${KAFKA_UI_BOOTSTRAP_SERVERS}
       DYNAMIC_CONFIG_ENABLED: ${KAFKA_UI_DYNAMIC_CONFIG_ENABLED}
     depends_on:
       kafka:
-        # 4. Wait for the healthcheck to pass before starting the UI
         condition: service_healthy
 
   postgres:
@@ -65,7 +67,7 @@ services:
     networks:
       - distributed-net
     ports:
-      - "${POSTGRES_PORT_HOST}:${POSTGRES_PORT}"
+      - "127.0.0.1:${POSTGRES_PORT_HOST}:${POSTGRES_PORT}"
     environment:
       POSTGRES_USER: ${DB_POSTGRES_USER}
       POSTGRES_PASSWORD: ${DB_POSTGRES_PASSWORD}
@@ -77,6 +79,11 @@ services:
       interval: ${POSTGRES_HEALTHCHECK_INTERVAL}
       timeout: ${POSTGRES_HEALTHCHECK_TIMEOUT}
       retries: ${POSTGRES_HEALTHCHECK_RETRIES}
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
   pgbouncer:
     image: ${PGBOUNCER_IMAGE}
@@ -84,7 +91,7 @@ services:
     networks:
       - distributed-net
     ports:
-      - "${PGBOUNCER_PORT_HOST}:${PGBOUNCER_PORT_CONTAINER}"
+      - "127.0.0.1:${PGBOUNCER_PORT_HOST}:${PGBOUNCER_PORT_CONTAINER}"
     environment:
       DB_USER: ${DB_POSTGRES_USER}
       DB_PASSWORD: ${DB_POSTGRES_PASSWORD}
@@ -114,7 +121,7 @@ services:
     networks:
       - distributed-net
     ports:
-      - "${MYSQL_PORT_HOST}:${MYSQL_PORT_CONTAINER}"
+      - "127.0.0.1:${MYSQL_PORT_HOST}:${MYSQL_PORT_CONTAINER}"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -128,6 +135,11 @@ services:
       timeout: ${MYSQL_HEALTHCHECK_TIMEOUT}
       retries: ${MYSQL_HEALTHCHECK_RETRIES}
       start_period: ${MYSQL_HEALTHCHECK_START_PERIOD}
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
   proxysql:
     image: ${PROXYSQL_IMAGE}
@@ -135,8 +147,8 @@ services:
     networks:
       - distributed-net
     ports:
-      - "${PROXYSQL_PORT_HOST}:${PROXYSQL_PORT_CONTAINER}"
-      - "${PROXYSQL_ADMIN_PORT_HOST}:${PROXYSQL_ADMIN_PORT_CONTAINER}"
+      - "127.0.0.1:${PROXYSQL_PORT_HOST}:${PROXYSQL_PORT_CONTAINER}"
+      - "127.0.0.1:${PROXYSQL_ADMIN_PORT_HOST}:${PROXYSQL_ADMIN_PORT_CONTAINER}"
     volumes:
       - ./infrastructure/proxysql/proxysql.cnf:/etc/proxysql.cnf
     depends_on:
@@ -149,7 +161,7 @@ services:
     networks:
       - distributed-net
     ports:
-      - "${MONGO_PORT_HOST}:${MONGO_PORT_CONTAINER}"
+      - "127.0.0.1:${MONGO_PORT_HOST}:${MONGO_PORT_CONTAINER}"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
@@ -162,6 +174,11 @@ services:
       timeout: ${MONGO_HEALTHCHECK_TIMEOUT}
       retries: ${MONGO_HEALTHCHECK_RETRIES}
       start_period: ${MONGO_HEALTHCHECK_START_PERIOD}
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
   mongo-express:
     image: ${MONGO_EXPRESS_IMAGE}
@@ -169,7 +186,7 @@ services:
     networks:
       - distributed-net
     ports:
-      - "${MONGO_EXPRESS_PORT_HOST}:${MONGO_EXPRESS_PORT_CONTAINER}"
+      - "127.0.0.1:${MONGO_EXPRESS_PORT_HOST}:${MONGO_EXPRESS_PORT_CONTAINER}"
     environment:
       ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_INITDB_ROOT_USERNAME}
       ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
@@ -185,6 +202,7 @@ services:
       dockerfile: Dockerfile
     networks:
       - distributed-net
+    # FIXED: Replaced ports with expose (only accessible within distributed-net)
     expose:
       - "${API_GATEWAY_PORT}"
     environment:
@@ -192,6 +210,13 @@ services:
       AUTH_SERVICE_URL: http://auth-service:${AUTH_SERVICE_PORT}
       NOTIFICATION_SERVICE_URL: http://notification-service:${NOTIFICATION_SERVICE_PORT}
       PAYMENT_SERVICE_URL: ${PAYMENT_SERVICE_URL}
+    # FIXED: Added healthcheck so Nginx can safely wait for it
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:${API_GATEWAY_PORT}/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     depends_on:
       auth-service:
         condition: service_healthy
@@ -200,8 +225,9 @@ services:
 
   auth-service:
     build:
-      context: .
-      dockerfile: services/auth-service/Dockerfile
+      # FIXED: Narrowed build context to service directory for better caching
+      context: ./services/auth-service
+      dockerfile: Dockerfile
     networks:
       - distributed-net
     expose:
@@ -231,8 +257,9 @@ services:
 
   notification-service:
     build:
-      context: .
-      dockerfile: services/notification-service/Dockerfile
+      # FIXED: Narrowed build context
+      context: ./services/notification-service
+      dockerfile: Dockerfile
     container_name: ${NOTIFICATION_SERVICE_CONTAINER_NAME}
     networks:
       - distributed-net
@@ -256,9 +283,11 @@ services:
     volumes:
       - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "80:80" # This is now the ONLY public entry point
+      # This truly remains the ONLY public entry point mapped to the host's 0.0.0.0
+      - "80:80" 
     networks:
       - distributed-net
     depends_on:
       api-gateway:
-        condition: service_started
+        # FIXED: Now waits for the gateway to be fully ready
+        condition: service_healthy
