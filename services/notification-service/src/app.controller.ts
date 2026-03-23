@@ -9,6 +9,8 @@ import {
   HostParam,
   Ip,
   Logger,
+  HttpCode,
+  Header,
 } from '@nestjs/common';
 import { AppService } from './app.service';
 import type { Request } from 'express';
@@ -20,6 +22,8 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get()
+  @HttpCode(204)
+  @Header('Cache-Control', 'no-store')
   getHello(
     @Req() request: Request,
     @Param() params: any,
@@ -64,5 +68,24 @@ export class AppController {
     this.logger.log(`Incoming params:`, JSON.stringify(params));
     this.logger.log(`Incoming queries: `, JSON.stringify(queries));
     return this.appService.getHello();
+  }
+  @Get('/wild/*splat')
+  getHelloWithWildcards(
+    @Req() request: Request,
+    @Param() params: any,
+    @Query() queries: any,
+    @Session() session: any,
+    @Headers() headers: any,
+    @Ip() ip: any,
+    @HostParam() hostParams: any,
+  ): string {
+    this.logger.log(`Incoming request: ${request.method} ${request.path}`);
+    this.logger.log(`Incoming session: `, session);
+    this.logger.log(`Incoming headers: ${session}`, headers);
+    this.logger.log(`Incoming ip: ${ip}`, ip);
+    this.logger.log(`Incoming hostParams: ${hostParams}`, hostParams);
+    this.logger.log(`Incoming params:`, JSON.stringify(params));
+    this.logger.log(`Incoming queries: `, JSON.stringify(queries));
+    return 'This is wild';
   }
 }
